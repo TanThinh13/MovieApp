@@ -1,74 +1,169 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  ScrollView,
+  Image,
+  FlatList,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useRouter } from "expo-router";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import useFetch from "@/services/useFetch";
+import { fetchMovies } from "@/services/api";
+import { getTrendingMovies } from "@/services/supabase";
 
-export default function HomeScreen() {
+import { icons } from "@/constants/icons";
+import { images } from "@/constants/images";
+import SearchBar from "@/components/SearchBar";
+import MovieCard from "@/components/MovieCard";
+import TrendingCard from "@/components/TrendingCard";
+import { useEffect, useState } from "react";
+import { getUserId } from "@/data/getUser";
+
+const Index = () => {
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  useEffect(() => {
+    const checkUserAuth = async () => {
+      const storedUserId = await getUserId();
+      if (!storedUserId) {
+        router.replace("/login");
+      } else {
+        setUserId(storedUserId);
+      }
+      setLoadingUser(false);
+    };
+
+    checkUserAuth();
+  }, []);
+
+  const { data: trendingMovies, loading: trendingLoading, error: trendingError } = useFetch(() => getTrendingMovies());
+  const { data: movies, loading: moviesLoading, error: moviesError } = useFetch(() => fetchMovies({ query: "" }));
+
+  if (loadingUser) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="blue" />
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={styles.container}>
+        <Image source={images.bg2} style={styles.backgroundImage} resizeMode="cover" />
+
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <Image source={icons.logo} style={styles.logo} />
+
+          {moviesLoading || trendingLoading ? (
+            <ActivityIndicator size="large" color="#0000ff" style={styles.loader} />
+          ) : moviesError || trendingError ? (
+            <Text>Error: {moviesError?.message || trendingError?.message}</Text>
+          ) : (
+            <View style={styles.contentContainer}>
+              <SearchBar onPress={() => router.push("/search")} placeholder="Search for a movie" />
+              {trendingMovies && (
+                <View style={styles.trendingContainer}>
+                  <Text style={styles.sectionTitle}>Trending Movies</Text>
+                  <FlatList
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.trendingList}
+                    data={trendingMovies}
+                    contentContainerStyle={styles.trendingListContent}
+                    renderItem={({ item, index }) => <TrendingCard movie={item} index={index} />}
+                    keyExtractor={(item) => item.movie_id.toString()}
+                    ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
+                  />
+                </View>
+              )}
+
+              <Text style={styles.sectionTitle}>Latest Movies</Text>
+              <View style={styles.movieListContainer}>
+                {movies?.length ? (
+                  movies.map((item) => <MovieCard key={item.id} {...item} />)
+                ) : (
+                  <Text>No movies available</Text>
+                )}
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#1a1a1a",
+
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  backgroundImage: {
+    position: "absolute",
+    width: "100%",
+    zIndex: 0,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  logo: {
+    width: 48,
+    height: 40,
+    marginTop: 40,
+    alignSelf: "center",
+  },
+  loader: {
+    marginTop: 40,
+    alignSelf: "center",
+  },
+  contentContainer: {
+    flex: 1,
+    marginTop: 20,
+  },
+  trendingContainer: {
+    marginTop: 40,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    color: "white",
+    fontWeight: "bold",
+    marginBottom: 12,
+  },
+  trendingList: {
+    marginBottom: 16,
+    marginTop: 12,
+  },
+  trendingListContent: {
+    gap: 26,
+  },
+  itemSeparator: {
+    width: 16,
+  },
+  movieListContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 10,
   },
 });
+
+export default Index;
